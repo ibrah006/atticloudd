@@ -1,0 +1,7 @@
+{
+  "port": 8420,
+  "host": "127.0.0.1",
+  "storageDir": "W:\\Attic",
+  "trashDays": 30,
+  "reserveGB": 1
+}
