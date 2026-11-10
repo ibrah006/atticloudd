@@ -457,12 +457,16 @@ test('password change signs out other devices', async () => {
   assert.equal((await main.get('/api/list')).status, 200);
 });
 
-test('removing a user ends access at once, keeps files', async () => {
-  assert.equal((await owner.json('DELETE', '/api/users/owner')).status, 400);
-  await member.upload('', 'keep.txt', Buffer.from('k')).catch(() => {});
-  assert.equal((await owner.json('DELETE', '/api/users/member')).status, 200);
+test('admin reset ends access at once, keeps files, lets them choose a new password', async () => {
+  assert.equal((await owner.post(`/api/users/${OWNER}/reset`)).status, 400);
+  await member.upload('', 'keep.txt', Buffer.from('k'));
+  assert.equal((await owner.post(`/api/users/${MEMBER}/reset`)).status, 200);
   assert.equal((await member.get('/api/list')).status, 401);
-  assert.equal(fs.existsSync(path.join(dataDir, 'storage', 'users', 'member')), true);
+  assert.deepEqual((await member.post('/api/login', { email: MEMBER, password: MEMBER_PW })).data, { needsPassword: true });
+  assert.equal(fs.existsSync(path.join(dataDir, 'storage', 'users', MEMBER, 'keep.txt')), true);
+  const fresh = crypto.randomBytes(10).toString('hex');
+  assert.equal((await member.post('/api/claim', { email: MEMBER, password: fresh })).status, 200);
+  assert.equal((await member.get('/api/list')).data.items.some((i) => i.name === 'keep.txt'), true);
 });
 
 test('public tunnel: starts, reports its URL, stops', async () => {
