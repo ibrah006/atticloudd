@@ -1010,9 +1010,9 @@ async function housekeeping() {
 }
 
 async function resetAccount(name) {
-  const user = db.user(String(name || '').toLowerCase());
-  if (!user) {
-    console.error(`No account named "${name}". Accounts: ${Object.keys(db.data.users).join(', ') || '(none)'}`);
+  const user = db.user(String(name || '').trim().toLowerCase());
+  if (!user || !user.pass) {
+    console.error(`No signed-up account for "${name}". Signed-up: ${Object.keys(db.data.users).filter((n) => db.user(n).pass).join(', ') || '(none)'}`);
     process.exit(1);
   }
   const password = randomToken(15);
