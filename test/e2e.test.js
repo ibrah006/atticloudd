@@ -330,9 +330,10 @@ test('folder ZIP extracts correctly with Windows tar', async () => {
 });
 
 test('accounts are isolated from each other', async () => {
-  assert.equal((await owner.post('/api/users', { username: '__proto__', password: MEMBER_PW })).status, 400);
-  assert.equal((await owner.post('/api/users', { email: MEMBER, password: MEMBER_PW })).status, 200);
-  assert.equal((await member.post('/api/login', { email: MEMBER, password: MEMBER_PW })).status, 200);
+  assert.equal((await member.post('/api/claim', { email: MEMBER, password: MEMBER_PW })).status, 200);
+  assert.equal((await member.get('/api/me')).data.user.admin, false);
+  const { users } = (await owner.get('/api/users')).data;
+  assert.deepEqual(users.map((u) => [u.name, u.admin, u.claimed]), [[OWNER, true, true], [MEMBER, false, true]]);
 
   assert.equal((await member.get('/api/list')).data.items.length, 0);
   assert.equal((await member.get('/api/file?path=docs/inner/B.txt')).status, 404);
@@ -343,7 +344,7 @@ test('accounts are isolated from each other', async () => {
   }
   assert.equal((await member.get('/api/remote')).status, 403);
   assert.equal((await member.get('/api/users')).status, 403);
-  assert.equal((await member.post('/api/users', { username: 'sneak', password: MEMBER_PW })).status, 403);
+  assert.equal((await member.post(`/api/users/${OWNER}/reset`)).status, 403);
   assert.equal((await member.post('/api/remote', { provider: 'cloudflare', on: true })).status, 403);
 });
 
