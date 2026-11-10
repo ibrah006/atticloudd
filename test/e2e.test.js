@@ -97,28 +97,28 @@ test.after(async () => {
 
 // Tests run in order: later ones rely on accounts and files created earlier.
 
-test('setup cannot be claimed through a tunnel', async () => {
-  const body = { username: 'evil', password: 'x'.repeat(20) };
-  for (const headers of [{ 'CF-Connecting-IP': '8.8.8.8' }, { 'X-Forwarded-For': '8.8.8.8' }, { 'Tailscale-User-Login': 'a@b.c' }]) {
-    assert.equal((await new Client().json('POST', '/api/setup', { body, headers })).status, 403);
+test('only allowed emails can sign in', async () => {
+  assert.equal((await owner.get('/api/me')).data.setupNeeded, false);
+  for (const email of ['stranger@test.example', '__proto__', '', 'owner@test.example.evil']) {
+    const res = await new Client('8.8.8.8').post('/api/login', { email, password: 'x'.repeat(20) });
+    assert.equal(res.status, 401, email);
+    assert.equal(res.data.error, 'Wrong email or password.');
+    assert.equal((await new Client('8.8.8.9').post('/api/claim', { email, password: OWNER_PW })).status, 409, email);
   }
-  // fetch won't send a custom Host, so this one goes over a raw request.
-  const status = await new Promise((resolve, reject) => {
-    const r = http.request({ port: PORT, method: 'POST', path: '/api/setup', headers: { Host: 'evil.example.com', 'X-Attic': '1', 'Content-Type': 'application/json' } }, (res) => { res.resume(); resolve(res.statusCode); });
-    r.on('error', reject);
-    r.end(JSON.stringify(body));
-  });
-  assert.equal(status, 403);
-  assert.equal((await owner.get('/api/me')).data.setupNeeded, true);
 });
 
-test('setup rejects weak passwords, then works once', async () => {
-  assert.equal((await owner.post('/api/setup', { username: 'owner', password: 'short' })).status, 400);
-  assert.equal((await owner.post('/api/setup', { username: 'owner', password: OWNER_PW })).status, 200);
-  assert.equal((await new Client().post('/api/setup', { username: 'second', password: OWNER_PW })).status, 409);
+test('first sign-in creates the password, and only once', async () => {
+  assert.deepEqual((await owner.post('/api/login', { email: ' Owner@Test.Example ', password: '' })).data, { needsPassword: true });
+  assert.equal((await owner.post('/api/claim', { email: OWNER, password: 'short' })).status, 400);
+  assert.equal((await owner.post('/api/claim', { email: OWNER, password: OWNER_PW })).status, 200);
   const me = await owner.get('/api/me');
-  assert.equal(me.data.user.name, 'owner');
+  assert.equal(me.data.user.name, OWNER);
   assert.equal(me.data.user.admin, true);
+  // Nobody can overwrite it afterwards, from here or through a tunnel.
+  assert.equal((await new Client().post('/api/claim', { email: OWNER, password: MEMBER_PW })).status, 409);
+  assert.equal((await new Client('8.8.4.4').post('/api/claim', { email: OWNER, password: MEMBER_PW })).status, 409);
+  assert.equal((await new Client().post('/api/login', { email: OWNER, password: '' })).status, 401);
+  assert.equal((await new Client().post('/api/login', { email: OWNER, password: OWNER_PW })).status, 200);
 });
 
 test('session cookie is locked down', async () => {
