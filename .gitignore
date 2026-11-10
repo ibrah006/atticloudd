@@ -1,0 +1,4 @@
+data/
+attic.config.json
+node_modules/
+*.tmp
