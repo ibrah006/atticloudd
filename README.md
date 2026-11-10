@@ -4,10 +4,21 @@ Personal cloud storage that runs on your own PC. Open it from any browser, anywh
 
 ## Start
 
-1. Double-click `start.bat`.
-2. At `http://localhost:8420` on this PC, create the owner account. For safety this can only be done on the PC itself.
-3. In **Settings**, turn on two-step sign-in.
-4. In **Remote**, turn on one of the options below.
+1. Copy `attic.config.example.json` to `attic.config.json` and list who may sign in:
+   ```json
+   { "allowedEmails": ["you@example.com", "friend@example.com"], "adminEmails": ["you@example.com"] }
+   ```
+   `attic.config.json` is git-ignored. Keep real addresses out of the repo. You can use the `ATTIC_ALLOWED_EMAILS` and `ATTIC_ADMIN_EMAILS` environment variables (comma-separated) instead.
+2. Double-click `start.bat`.
+3. Open `http://localhost:8420` and sign in with your email, leaving the password empty. The first sign-in for each email asks that person to create a password.
+4. In **Settings**, turn on two-step sign-in.
+5. In **Remote**, turn on one of the options below.
+
+Until someone has created a password, anyone who knows their email can create it for them. Have everyone sign in once before you turn on public remote access.
+
+## People
+
+Only emails in `allowedEmails` can sign in. To add or remove someone, edit the list and restart Attic. Removing an email signs that person out and disables their share links. Their files stay on disk, under `storage\users\<email>`. Admins (`adminEmails`) can manage remote access, and under **People** they can reset someone's password. The reset person then chooses a new password the next time they sign in.
 
 ## Choosing where files live
 
@@ -50,7 +61,7 @@ For a permanent address on your own domain, create a Cloudflare Tunnel that poin
 On the PC, run this. It prints a new password and turns off two-step sign-in:
 
 ```bash
-node server.js reset yourusername
+node server.js reset you@example.com
 ```
 
 ## Tests
