@@ -145,7 +145,8 @@ function loadSession(req) {
   if (!Object.hasOwn(db.data.sessions, hash)) return null;
   const session = db.data.sessions[hash];
   const user = db.user(session.user);
-  if (!user || session.exp < Date.now()) {
+  // Removing an email from the allowlist (and restarting) signs that person out everywhere.
+  if (!user || !user.pass || !isAllowed(user.name) || session.exp < Date.now()) {
     delete db.data.sessions[hash];
     db.save();
     return null;
@@ -956,7 +957,7 @@ async function handle(req, res) {
     }
     const auth = loadSession(req);
     if (!r.opts.public && !auth) throw new HttpError(401, 'Please sign in.');
-    if (r.opts.admin && !auth.user.admin) throw new HttpError(403, 'Only an admin can do that.');
+    if (r.opts.admin && !isAdmin(auth.user.name)) throw new HttpError(403, 'Only an admin can do that.');
 
     const ctx = {
       req, res, url, params, auth,
