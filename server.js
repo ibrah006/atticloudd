@@ -195,38 +195,49 @@ const admin = { admin: true };
 // ---- Accounts -----------------------------------------------------------------------------
 
 route('GET', '/api/me', (c) => ({
-  setupNeeded: Object.keys(db.data.users).length === 0,
+  setupNeeded: ALLOWED.size === 0,
   local: c.local,
-  user: c.auth ? { name: c.auth.user.name, admin: c.auth.user.admin, totp: Boolean(c.auth.user.totp && c.auth.user.totp.enabled) } : null,
+  user: c.auth ? { name: c.auth.user.name, admin: isAdmin(c.auth.user.name), totp: Boolean(c.auth.user.totp && c.auth.user.totp.enabled) } : null,
 }), open);
 
-route('POST', '/api/setup', async (c) => {
-  if (Object.keys(db.data.users).length) throw new HttpError(409, 'Setup is already complete.');
-  // Stops a stranger claiming the owner account if a tunnel is opened before setup.
-  if (!c.local) throw new HttpError(403, 'Finish setup from a browser on the PC running Attic.');
+const readEmail = (b) => String(b.email || '').trim().toLowerCase().slice(0, 254);
+// An allowed email with no password yet: whoever signs in first with it chooses the password.
+const unclaimed = (email) => isAllowed(email) && !(db.user(email) && db.user(email).pass);
+
+route('POST', '/api/claim', async (c) => {
   const b = await c.body();
-  const name = String(b.username || '').trim().toLowerCase();
-  checkUsername(name);
+  const email = readEmail(b);
+  const key = `ip:${c.ip}`;
+  if (!c.local) limiter.check(key);
+  if (!unclaimed(email)) {
+    if (!c.local) limiter.fail(key);
+    throw new HttpError(409, 'This account already has a password. Sign in instead.');
+  }
   checkPasswordStrength(b.password);
-  const user = { name, admin: true, pass: await hashPassword(b.password), created: Date.now() };
-  if (Object.keys(db.data.users).length) throw new HttpError(409, 'Setup is already complete.');
-  db.data.users[name] = user;
-  await fsp.mkdir(userRoot(name), { recursive: true });
+  const pass = await hashPassword(b.password);
+  // Re-check after the slow hash so two simultaneous first sign-ins can't both win.
+  if (!unclaimed(email)) throw new HttpError(409, 'This account already has a password. Sign in instead.');
+  const user = db.user(email) || { name: email, created: Date.now() };
+  user.pass = pass;
+  delete user.totp;
+  db.data.users[email] = user;
+  await fsp.mkdir(userRoot(email), { recursive: true });
   startSession(c, user);
   return { ok: true };
 }, open);
 
 route('POST', '/api/login', async (c) => {
   const b = await c.body();
-  const name = String(b.username || '').trim().toLowerCase().slice(0, 40);
+  const name = readEmail(b);
   const password = String(b.password || '').slice(0, 512);
   const keys = c.local ? [] : [`ip:${c.ip}`, `user:${name}`];
   keys.forEach((k) => limiter.check(k));
+  if (unclaimed(name)) return { needsPassword: true };
   const fail = () => {
     keys.forEach((k) => limiter.fail(k));
-    return new HttpError(401, 'Wrong username or password.');
+    return new HttpError(401, 'Wrong email or password.');
   };
-  const user = db.user(name);
+  const user = isAllowed(name) ? db.user(name) : null;
   const good = await verifyPassword(password, user ? user.pass : await dummyHash);
   if (!user || !good) throw fail();
   if (user.totp && user.totp.enabled) {
