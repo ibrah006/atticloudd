@@ -782,43 +782,19 @@ const renderPeople = guard(async () => {
   const token = ++renderToken;
   const { users } = await api('GET', '/api/users');
   if (token !== renderToken) return;
-  const name = h('input', { required: true, autocomplete: 'off', placeholder: 'username', 'aria-label': 'Username', spellcheck: false });
-  const pass = h('input', { type: 'password', required: true, minLength: 12, autocomplete: 'new-password', placeholder: 'At least 12 characters', 'aria-label': 'Password' });
-  const isAdmin = h('input', { type: 'checkbox' });
-  page('People', 'Each person gets a private home folder and their own sign-in.',
+  page('People', 'Only these emails can sign in. Each person picks their password the first time they sign in. To add or remove someone, edit allowedEmails in attic.config.json and restart Attic.',
     h('div', { class: 'stack' }, users.map((u) => h('article', { class: 'row-card' },
       ic('people'),
-      h('div', { class: 'grow' }, h('strong', {}, u.name), h('p', { class: 'muted small' }, [u.admin ? 'Admin' : 'Member', u.totp ? 'Two-step on' : 'Two-step off'].join(' · '))),
-      h('button', {
+      h('div', { class: 'grow' }, h('strong', {}, u.name), h('p', { class: 'muted small' }, [u.admin ? 'Admin' : 'Member', u.claimed ? (u.totp ? 'Two-step on' : 'Two-step off') : 'Has not signed in yet'].join(' · '))),
+      u.name === S.me.name || !u.claimed ? null : h('button', {
         class: 'btn',
         onclick: guard(async () => {
-          const password = await askText({ title: `New password for ${u.name}`, label: 'At least 12 characters', ok: 'Set password' });
-          if (!password) return;
-          await api('POST', `/api/users/${enc(u.name)}/password`, { password });
-          toast('Password changed, and their devices were signed out');
+          if (!await confirmBox({ title: `Reset ${u.name}?`, text: 'Their password and two-step sign-in are cleared and their devices are signed out. They choose a new password the next time they sign in.', ok: 'Reset', danger: true })) return;
+          await api('POST', `/api/users/${enc(u.name)}/reset`);
+          toast('Password cleared');
           renderPeople();
         }),
-      }, 'Reset'),
-      u.name === S.me.name ? null : h('button', {
-        class: 'btn danger-text',
-        onclick: guard(async () => {
-          if (!await confirmBox({ title: `Remove ${u.name}?`, text: 'Their sign-in and share links are removed. Their files stay on this PC.', ok: 'Remove', danger: true })) return;
-          await api('DELETE', `/api/users/${enc(u.name)}`);
-          renderPeople();
-        }),
-      }, 'Remove')))),
-    h('form', {
-      class: 'card',
-      onsubmit: guard(async (e) => {
-        e.preventDefault();
-        await api('POST', '/api/users', { username: name.value, password: pass.value, admin: isAdmin.checked });
-        toast('Account created');
-        renderPeople();
-      }),
-    }, h('h2', {}, 'Add someone'),
-    h('div', { class: 'form-row' }, name, pass),
-    h('label', { class: 'check' }, isAdmin, 'Can manage people and remote access'),
-    h('div', {}, h('button', { class: 'btn primary' }, 'Add account'))));
+      }, 'Reset')))));
 });
 
 function twoStepCard() {
