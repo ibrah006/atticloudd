@@ -989,27 +989,9 @@ function authScreen(title, intro, form) {
 }
 
 function showSetup(local) {
-  if (!local) {
-    authScreen('Almost ready', 'For safety, the owner account can only be created from a browser on the PC running Attic. Open Attic on that PC to finish.', null);
-    return;
-  }
-  const user = h('input', { required: true, autocomplete: 'username', spellcheck: false, autocapitalize: 'off', 'aria-label': 'Username' });
-  const pass = h('input', { type: 'password', required: true, minLength: 12, autocomplete: 'new-password', 'aria-label': 'Password' });
-  const error = h('p', { class: 'error', hidden: true });
-  authScreen('Set up your Attic', 'Create the owner account. This one can manage other people and remote access.', h('form', {
-    class: 'gap',
-    onsubmit: async (e) => {
-      e.preventDefault();
-      try {
-        await api('POST', '/api/setup', { username: user.value, password: pass.value });
-        boot();
-      } catch (err) {
-        error.textContent = err.message;
-        error.hidden = false;
-      }
-    },
-  }, h('label', { class: 'field' }, h('span', {}, 'Username'), user), h('label', { class: 'field' }, h('span', {}, 'Password (12+ characters)'), pass), error, h('button', { class: 'btn primary wide' }, 'Create account')));
-  user.focus();
+  authScreen('Almost ready', local
+    ? 'Nobody can sign in yet. Copy attic.config.example.json to attic.config.json, list the allowed emails in "allowedEmails" (and yours in "adminEmails"), then restart Attic.'
+    : 'This Attic has not been set up yet.', null);
 }
 
 function showLogin() {
