@@ -1032,6 +1032,7 @@ if (process.argv[2] === 'reset') {
   });
   server.listen(config.port, config.host, () => {
     console.log(`Attic is running.\n  This PC:  http://localhost:${config.port}\n  Files in: ${config.storageDir}`);
+    if (!ALLOWED.size) console.log('  NOTE:     nobody can sign in yet. Add allowedEmails to attic.config.json and restart.');
     if (!['127.0.0.1', '::1', 'localhost'].includes(config.host)) {
       console.log(`  WARNING:  listening on ${config.host} without HTTPS. Use this only on a network you trust.`);
     }
