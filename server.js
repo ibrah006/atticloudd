@@ -787,7 +787,7 @@ const shareProof = (token, share) => crypto.createHmac('sha256', db.data.secret)
 function getShare(token) {
   if (!Object.hasOwn(db.data.shares, token)) throw new HttpError(404, 'This link does not exist or has expired.');
   const share = db.data.shares[token];
-  if ((share.exp && share.exp < Date.now()) || !db.user(share.owner)) throw new HttpError(404, 'This link does not exist or has expired.');
+  if ((share.exp && share.exp < Date.now()) || !db.user(share.owner) || !isAllowed(share.owner)) throw new HttpError(404, 'This link does not exist or has expired.');
   return share;
 }
 
