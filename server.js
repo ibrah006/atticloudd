@@ -332,43 +332,24 @@ route('POST', '/api/account/sessions/revoke-others', (c) => {
 
 // ---- People (admin) -----------------------------------------------------------------------
 
+// Who can sign in is decided by allowedEmails in the config, so this page only shows and resets.
 route('GET', '/api/users', () => ({
-  users: Object.values(db.data.users).map((u) => ({ name: u.name, admin: u.admin, created: u.created, totp: Boolean(u.totp && u.totp.enabled) })),
+  users: [...ALLOWED].map((email) => {
+    const u = db.user(email);
+    return { name: email, admin: isAdmin(email), claimed: Boolean(u && u.pass), created: u ? u.created : null, totp: Boolean(u && u.totp && u.totp.enabled) };
+  }),
 }), admin);
 
-route('POST', '/api/users', async (c) => {
-  const b = await c.body();
-  const name = String(b.username || '').trim().toLowerCase();
-  checkUsername(name);
-  checkPasswordStrength(b.password);
-  if (db.user(name)) throw new HttpError(409, 'That username is taken.');
-  db.data.users[name] = { name, admin: Boolean(b.admin), pass: await hashPassword(b.password), created: Date.now() };
-  await fsp.mkdir(userRoot(name), { recursive: true });
-  db.save();
-  return { ok: true };
-}, admin);
-
-route('POST', '/api/users/:name/password', async (c) => {
+// Clears the password: they choose a new one the next time they sign in.
+route('POST', '/api/users/:name/reset', (c) => {
   const user = db.user(c.params.name);
-  if (!user) throw new HttpError(404, 'No such user.');
-  const b = await c.body();
-  checkPasswordStrength(b.password);
-  user.pass = await hashPassword(b.password);
+  if (!user || !isAllowed(user.name)) throw new HttpError(404, 'No such user.');
+  if (user.name === c.auth.user.name) throw new HttpError(400, 'Change your own password under Settings.');
+  user.pass = '';
   delete user.totp;
   endSessions(user.name);
   db.save();
   return { ok: true };
-}, admin);
-
-route('DELETE', '/api/users/:name', (c) => {
-  const user = db.user(c.params.name);
-  if (!user) throw new HttpError(404, 'No such user.');
-  if (user.name === c.auth.user.name) throw new HttpError(400, 'You cannot remove your own account.');
-  delete db.data.users[user.name];
-  endSessions(user.name);
-  for (const [token, s] of Object.entries(db.data.shares)) if (s.owner === user.name) delete db.data.shares[token];
-  db.save();
-  return { ok: true }; // Their files stay on disk: removing a login shouldn't destroy data.
 }, admin);
 
 // ---- Files --------------------------------------------------------------------------------
