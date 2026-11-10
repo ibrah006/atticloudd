@@ -16,6 +16,8 @@ const PORT = 18000 + Math.floor(Math.random() * 2000);
 const BASE = `http://127.0.0.1:${PORT}`;
 const OWNER_PW = crypto.randomBytes(12).toString('hex');
 const MEMBER_PW = crypto.randomBytes(12).toString('hex');
+const OWNER = 'owner@test.example';
+const MEMBER = 'member@test.example';
 let proc;
 
 // cloudflared stand-in: the server runs `<bin> tunnel ...` and node happily executes ./tunnel.
@@ -70,9 +72,10 @@ const owner = new Client();
 const member = new Client();
 
 test.before(async () => {
-  proc = spawn(process.execPath, [path.join(__dirname, '..', 'server.js'), `--data=${dataDir}`, `--port=${PORT}`], {
+  // --storage too, so a local attic.config.json with storageDir can never point tests at real files.
+  proc = spawn(process.execPath, [path.join(__dirname, '..', 'server.js'), `--data=${dataDir}`, `--storage=${path.join(dataDir, 'storage')}`, `--port=${PORT}`], {
     cwd: tmp,
-    env: { ...process.env, ATTIC_CLOUDFLARED: process.execPath },
+    env: { ...process.env, ATTIC_CLOUDFLARED: process.execPath, ATTIC_ALLOWED_EMAILS: `${OWNER},${MEMBER}`, ATTIC_ADMIN_EMAILS: OWNER },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   for (let i = 0; i < 100; i++) {
