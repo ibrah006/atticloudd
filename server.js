@@ -31,7 +31,19 @@ const DAY = 86400000;
 const SESSION_TTL = 30 * DAY;
 const CHUNK_SIZE = 8 * 1024 * 1024; // Comfortably below the 100 MB request limit of Cloudflare tunnels.
 const CHUNK_MAX = 32 * 1024 * 1024;
-const USERNAME = /^[a-z0-9][a-z0-9_-]{1,31}$/;
+const EMAIL = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+
+// Each email doubles as the account's home folder name, so it must also be a safe folder name.
+for (const email of [...config.allowedEmails, ...config.adminEmails]) {
+  if (email.length > 254 || !EMAIL.test(email) || !validName(email)) {
+    console.error(`"${email}" in allowedEmails/adminEmails is not a valid email address.`);
+    process.exit(1);
+  }
+}
+const ALLOWED = new Set([...config.allowedEmails, ...config.adminEmails]);
+const ADMINS = new Set(config.adminEmails);
+const isAllowed = (email) => ALLOWED.has(email);
+const isAdmin = (email) => ADMINS.has(email);
 
 const userRoot = (name) => path.join(USERS_DIR, name);
 const trashRoot = (name) => path.join(TRASH_DIR, name);
@@ -117,12 +129,6 @@ function str(value, label = 'value') {
 function checkPasswordStrength(p) {
   if (typeof p !== 'string' || p.length < 12) throw new HttpError(400, 'Use a password of at least 12 characters.');
   if (p.length > 512) throw new HttpError(400, 'That password is too long.');
-}
-
-function checkUsername(name) {
-  if (typeof name !== 'string' || !USERNAME.test(name) || !validName(name)) {
-    throw new HttpError(400, 'Usernames are 2-32 lowercase letters, numbers, - or _.');
-  }
 }
 
 const noRoot = (p) => {
