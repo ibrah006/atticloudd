@@ -175,7 +175,7 @@ test('links and junctions planted in storage are not followed', async () => {
   const outside = path.join(tmp, 'outside');
   fs.mkdirSync(outside, { recursive: true });
   fs.writeFileSync(path.join(outside, 'private.txt'), 'nope');
-  const root = path.join(dataDir, 'storage', 'users', 'owner');
+  const root = path.join(dataDir, 'storage', 'users', OWNER);
   fs.symlinkSync(outside, path.join(root, 'jump'), 'junction');
   assert.equal((await owner.get('/api/file?path=jump/private.txt')).status, 403);
   assert.equal((await owner.get('/api/list?path=jump')).status, 403);
@@ -459,7 +459,8 @@ test('password change signs out other devices', async () => {
 
 test('admin reset ends access at once, keeps files, lets them choose a new password', async () => {
   assert.equal((await owner.post(`/api/users/${OWNER}/reset`)).status, 400);
-  await member.upload('', 'keep.txt', Buffer.from('k'));
+  // The member client was signed out by the password-change test, so put a file there directly.
+  fs.writeFileSync(path.join(dataDir, 'storage', 'users', MEMBER, 'keep.txt'), 'k');
   assert.equal((await owner.post(`/api/users/${MEMBER}/reset`)).status, 200);
   assert.equal((await member.get('/api/list')).status, 401);
   assert.deepEqual((await member.post('/api/login', { email: MEMBER, password: MEMBER_PW })).data, { needsPassword: true });
