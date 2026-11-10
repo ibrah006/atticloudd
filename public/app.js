@@ -994,9 +994,35 @@ function showSetup(local) {
     : 'This Attic has not been set up yet.', null);
 }
 
+// First sign-in for an allowed email: the person picks their password here.
+function showClaim(email) {
+  const pass = h('input', { type: 'password', required: true, minLength: 12, autocomplete: 'new-password', 'aria-label': 'New password' });
+  const again = h('input', { type: 'password', required: true, minLength: 12, autocomplete: 'new-password', 'aria-label': 'Repeat password' });
+  const error = h('p', { class: 'error', hidden: true });
+  authScreen('Create your password', `First sign-in for ${email}. Choose a password of at least 12 characters.`, h('form', {
+    class: 'gap',
+    onsubmit: async (e) => {
+      e.preventDefault();
+      error.hidden = true;
+      try {
+        if (pass.value !== again.value) throw new Error('The two passwords do not match.');
+        await api('POST', '/api/claim', { email, password: pass.value });
+        boot();
+      } catch (err) {
+        error.textContent = err.message;
+        error.hidden = false;
+      }
+    },
+  }, h('label', { class: 'field' }, h('span', {}, 'New password'), pass), h('label', { class: 'field' }, h('span', {}, 'Repeat password'), again), error,
+  h('button', { class: 'btn primary wide' }, 'Create password and sign in'),
+  h('button', { type: 'button', class: 'btn wide', onclick: showLogin }, 'Back')));
+  pass.focus();
+}
+
 function showLogin() {
-  const user = h('input', { required: true, autocomplete: 'username', spellcheck: false, autocapitalize: 'off', 'aria-label': 'Username' });
-  const pass = h('input', { type: 'password', required: true, autocomplete: 'current-password', 'aria-label': 'Password' });
+  const user = h('input', { type: 'email', required: true, autocomplete: 'username', spellcheck: false, autocapitalize: 'off', 'aria-label': 'Email' });
+  // Not required: on a first sign-in there is no password yet.
+  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': 'Password' });
   const code = h('input', { inputMode: 'numeric', autocomplete: 'one-time-code', 'aria-label': 'Six-digit code' });
   const codeField = h('label', { class: 'field', hidden: true }, h('span', {}, 'Code from your authenticator'), code);
   const error = h('p', { class: 'error', hidden: true });
@@ -1006,7 +1032,11 @@ function showLogin() {
       e.preventDefault();
       error.hidden = true;
       try {
-        const res = await api('POST', '/api/login', { username: user.value, password: pass.value, code: code.value || undefined });
+        const res = await api('POST', '/api/login', { email: user.value, password: pass.value, code: code.value || undefined });
+        if (res.needsPassword) {
+          showClaim(user.value.trim().toLowerCase());
+          return;
+        }
         if (res.needsCode) {
           codeField.hidden = false;
           code.required = true;
@@ -1019,7 +1049,7 @@ function showLogin() {
         error.hidden = false;
       }
     },
-  }, h('label', { class: 'field' }, h('span', {}, 'Username'), user), h('label', { class: 'field' }, h('span', {}, 'Password'), pass), codeField, error, h('button', { class: 'btn primary wide' }, 'Sign in')));
+  }, h('label', { class: 'field' }, h('span', {}, 'Email'), user), h('label', { class: 'field' }, h('span', {}, 'Password (leave empty on your first sign-in)'), pass), codeField, error, h('button', { class: 'btn primary wide' }, 'Sign in')));
   user.focus();
 }
 
