@@ -123,12 +123,12 @@ test('first sign-in creates the password, and only once', async () => {
 
 test('session cookie is locked down', async () => {
   const c = new Client();
-  const res = await c.req('POST', '/api/login', { body: { username: 'owner', password: OWNER_PW } });
+  const res = await c.req('POST', '/api/login', { body: { email: OWNER, password: OWNER_PW } });
   const cookie = res.headers.getSetCookie()[0];
   assert.match(cookie, /HttpOnly/);
   assert.match(cookie, /SameSite=Strict/);
   assert.doesNotMatch(cookie, /Secure/); // plain localhost
-  const viaTunnel = await new Client('9.9.9.1').req('POST', '/api/login', { body: { username: 'owner', password: OWNER_PW }, headers: { 'X-Forwarded-Proto': 'https' } });
+  const viaTunnel = await new Client('9.9.9.1').req('POST', '/api/login', { body: { email: OWNER, password: OWNER_PW }, headers: { 'X-Forwarded-Proto': 'https' } });
   assert.match(viaTunnel.headers.getSetCookie()[0], /Secure/);
   assert.ok(viaTunnel.headers.get('strict-transport-security'));
 });
@@ -331,8 +331,8 @@ test('folder ZIP extracts correctly with Windows tar', async () => {
 
 test('accounts are isolated from each other', async () => {
   assert.equal((await owner.post('/api/users', { username: '__proto__', password: MEMBER_PW })).status, 400);
-  assert.equal((await owner.post('/api/users', { username: 'member', password: MEMBER_PW })).status, 200);
-  assert.equal((await member.post('/api/login', { username: 'member', password: MEMBER_PW })).status, 200);
+  assert.equal((await owner.post('/api/users', { email: MEMBER, password: MEMBER_PW })).status, 200);
+  assert.equal((await member.post('/api/login', { email: MEMBER, password: MEMBER_PW })).status, 200);
 
   assert.equal((await member.get('/api/list')).data.items.length, 0);
   assert.equal((await member.get('/api/file?path=docs/inner/B.txt')).status, 404);
@@ -408,7 +408,7 @@ test('expired share links stop working', async () => {
 });
 
 test('password guessing is throttled across IPs, sparing the local owner', async () => {
-  const body = { username: 'member', password: 'wrong-password-here' };
+  const body = { email: MEMBER, password: 'wrong-password-here' };
   const attacker = new Client('6.6.6.6');
   for (let i = 0; i < 5; i++) assert.equal((await attacker.post('/api/login', body)).status, 401);
   const blocked = await attacker.post('/api/login', body);
@@ -417,13 +417,13 @@ test('password guessing is throttled across IPs, sparing the local owner', async
   // Rotating IP doesn't help: the account itself is cooling down.
   assert.equal((await new Client('6.6.6.7').post('/api/login', body)).status, 429);
   // Correct password is refused during cooldown too, so guesses can't be confirmed.
-  assert.equal((await new Client('6.6.6.8').post('/api/login', { username: 'member', password: MEMBER_PW })).status, 429);
+  assert.equal((await new Client('6.6.6.8').post('/api/login', { email: MEMBER, password: MEMBER_PW })).status, 429);
   // Someone at the PC is never locked out.
-  assert.equal((await new Client().post('/api/login', { username: 'member', password: MEMBER_PW })).status, 200);
-  // Unknown and known usernames give the same answer.
-  const unknown = await new Client('6.6.6.9').post('/api/login', { username: 'nobody', password: 'x' });
+  assert.equal((await new Client().post('/api/login', { email: MEMBER, password: MEMBER_PW })).status, 200);
+  // Unknown and known emails give the same answer.
+  const unknown = await new Client('6.6.6.9').post('/api/login', { email: 'nobody@test.example', password: 'x' });
   assert.equal(unknown.status, 401);
-  assert.equal(unknown.data.error, 'Wrong username or password.');
+  assert.equal(unknown.data.error, 'Wrong email or password.');
 });
 
 test('two-step sign-in: enrol, require, block replay, disable', async () => {
@@ -435,11 +435,11 @@ test('two-step sign-in: enrol, require, block replay, disable', async () => {
   assert.equal((await owner.post('/api/account/2fa/enable', { code: totpAt(secret, enrolStep) })).status, 200);
 
   const c = new Client();
-  assert.deepEqual((await c.post('/api/login', { username: 'owner', password: OWNER_PW })).data, { needsCode: true });
+  assert.deepEqual((await c.post('/api/login', { email: OWNER, password: OWNER_PW })).data, { needsCode: true });
   assert.equal((await c.get('/api/me')).data.user, null);
-  assert.equal((await c.post('/api/login', { username: 'owner', password: OWNER_PW, code: totpAt(secret, enrolStep) })).status, 401, 'replayed code');
-  assert.equal((await c.post('/api/login', { username: 'owner', password: 'wrong', code: totpAt(secret, step() + 1) })).status, 401);
-  assert.equal((await c.post('/api/login', { username: 'owner', password: OWNER_PW, code: totpAt(secret, step() + 1) })).status, 200);
+  assert.equal((await c.post('/api/login', { email: OWNER, password: OWNER_PW, code: totpAt(secret, enrolStep) })).status, 401, 'replayed code');
+  assert.equal((await c.post('/api/login', { email: OWNER, password: 'wrong', code: totpAt(secret, step() + 1) })).status, 401);
+  assert.equal((await c.post('/api/login', { email: OWNER, password: OWNER_PW, code: totpAt(secret, step() + 1) })).status, 200);
   assert.equal((await c.get('/api/me')).data.user.totp, true);
 
   assert.equal((await owner.post('/api/account/2fa/disable', { password: OWNER_PW, code: '000000' })).status, 403);
@@ -447,9 +447,9 @@ test('two-step sign-in: enrol, require, block replay, disable', async () => {
 
 test('password change signs out other devices', async () => {
   const other = new Client();
-  await other.post('/api/login', { username: 'member', password: MEMBER_PW });
+  await other.post('/api/login', { email: MEMBER, password: MEMBER_PW });
   const main = new Client();
-  await main.post('/api/login', { username: 'member', password: MEMBER_PW });
+  await main.post('/api/login', { email: MEMBER, password: MEMBER_PW });
   const next = crypto.randomBytes(10).toString('hex');
   assert.equal((await main.post('/api/account/password', { current: MEMBER_PW, next })).status, 200);
   assert.equal((await other.get('/api/list')).status, 401);
